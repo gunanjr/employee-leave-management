@@ -29,7 +29,8 @@ exports.applyLeave = async (req, res) => {
       reason,
     });
 
-    const populatedRequest = await LeaveRequest.findById(leaveRequest._id).populate('userId', 'name email');
+    const populatedRequest = await LeaveRequest.findById(leaveRequest._id)
+      .populate('userId', 'name email');
 
     res.status(201).json(populatedRequest);
   } catch (error) {
@@ -112,30 +113,54 @@ exports.getPendingRequests = async (req, res) => {
   }
 };
 
+// Updated approveLeave with extensive logging
 exports.approveLeave = async (req, res) => {
   try {
     const { managerComment } = req.body;
-    const request = await LeaveRequest.findById(req.params.id);
+    const requestId = req.params.id;
 
-    console.log('Approving request:', req.params.id);
+    console.log('=== APPROVE LEAVE DEBUG ===');
+    console.log('Request ID:', requestId);
+    console.log('Manager Comment:', managerComment);
+
+    const request = await LeaveRequest.findById(requestId);
 
     if (!request) {
+      console.log('❌ Leave request not found');
       return res.status(404).json({ message: 'Leave request not found' });
     }
 
+    console.log('✅ Request found:', { status: request.status, leaveType: request.leaveType });
+
     if (request.status !== 'pending') {
+      console.log('❌ Already processed:', request.status);
       return res.status(400).json({ message: 'Request already processed' });
     }
 
     const user = await User.findById(request.userId);
+    
     if (!user) {
+      console.log('❌ User not found');
       return res.status(404).json({ message: 'User not found' });
     }
+
+    console.log('✅ User found:', user.name);
 
     let balanceField;
     if (request.leaveType === 'sick') balanceField = 'sickLeave';
     else if (request.leaveType === 'casual') balanceField = 'casualLeave';
     else if (request.leaveType === 'vacation') balanceField = 'vacation';
+
+    console.log('Balance check:', {
+      field: balanceField,
+      current: user.leaveBalance[balanceField],
+      needed: request.totalDays
+    });
+
+    if (user.leaveBalance[balanceField] < request.totalDays) {
+      console.log('❌ Insufficient balance');
+      return res.status(400).json({ message: 'Insufficient leave balance' });
+    }
 
     user.leaveBalance[balanceField] -= request.totalDays;
     await user.save();
@@ -144,12 +169,14 @@ exports.approveLeave = async (req, res) => {
     request.managerComment = managerComment || 'Approved';
     await request.save();
 
-    const populatedRequest = await LeaveRequest.findById(request._id).populate('userId', 'name email');
+    const populatedRequest = await LeaveRequest.findById(request._id)
+      .populate('userId', 'name email');
 
-    console.log('Leave approved successfully');
+    console.log('✅ APPROVED SUCCESSFULLY');
     res.json(populatedRequest);
   } catch (error) {
-    console.error('Approve Leave Error:', error);
+    console.error('❌ ERROR:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({ message: error.message });
   }
 };
@@ -173,7 +200,8 @@ exports.rejectLeave = async (req, res) => {
     request.managerComment = managerComment || 'Rejected';
     await request.save();
 
-    const populatedRequest = await LeaveRequest.findById(request._id).populate('userId', 'name email');
+    const populatedRequest = await LeaveRequest.findById(request._id)
+      .populate('userId', 'name email');
 
     console.log('Leave rejected successfully');
     res.json(populatedRequest);

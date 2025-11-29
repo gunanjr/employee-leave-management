@@ -12,7 +12,7 @@ exports.protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.id).select('-password');
-      next();
+      return next(); // ← FIXED: Added return
     } catch (error) {
       return res.status(401).json({ message: 'Not authorized, token failed' });
     }
@@ -25,8 +25,8 @@ exports.protect = async (req, res, next) => {
 
 exports.manager = (req, res, next) => {
   if (req.user && req.user.role === 'manager') {
-    next();
+    return next(); // ← FIXED: Added return statement
   } else {
-    res.status(403).json({ message: 'Manager access only' });
+    return res.status(403).json({ message: 'Manager access only' }); // ← FIXED: Added return
   }
 };
